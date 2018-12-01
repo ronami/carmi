@@ -11,6 +11,10 @@ module.exports = function(chain) {
         return collection.anyValues(item => item.eq(val));
     }
 
+    function compact(collection) {
+        return collection.filter(_.identity)
+    }
+
     function assignIn(obj, args) {
         return chain([
             obj,
@@ -46,6 +50,6 @@ module.exports = function(chain) {
         return _.reduce(args, (a, b) => a.size().plus(b.size()).range().map(index => index.lt(a.size()).ternary(a.get(index), b.get(index.minus(a.size())))), collection)
     }
 
-    return { getIn, includes, assignIn, reduce, concat, chunks, find };
+    return { getIn, includes, assignIn, reduce, concat, chunks, find, compact };
 };
 

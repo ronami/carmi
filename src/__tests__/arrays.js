@@ -383,6 +383,18 @@ describe('testing array', () => {
         });
       });
 
+      describe('compact', () => {
+        it('remove falsy things', async() => {
+          const model = {
+            result: root.compact()
+          };
+          const optModel = eval(await compile(model, { compiler }));
+          const initialData = [0, 1, 2, false, 3, null, null, 4, undefined];
+          const inst = optModel(initialData, funcLibrary);
+          expect(inst.result).toEqual([1, 2, 3, 4]);
+        });
+      })
+
       it('with empty array', async () => {
         const model = {
           result: root.get('a').concat(root.get('b')),
