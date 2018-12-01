@@ -335,30 +335,46 @@ describe('testing array', () => {
       const inst = optModel(initialData, funcLibrary);
       expect(inst.result).toEqual(0);
     });
-    it('concat', async () => {
-      const model = {
-        result: root.get('a').concat(root.get('b')),
-        set: setter('a', arg0)
-      };
-      const optModel = eval(await compile(model, { compiler }));
-      const initialData = {a: [1, 3, 5], b: [2, 6]};
-      const inst = optModel(initialData, funcLibrary);
-      expect(inst.result).toEqual([1, 3, 5, 2, 6]);
-      inst.set(2, 1);
-      expect(inst.result).toEqual([1, 3, 1, 2, 6]);
-    });
-    it('concat with empty array', async () => {
-      const model = {
-        result: root.get('a').concat(root.get('b')),
-        set: setter('a', arg0)
-      };
-      const optModel = eval(await compile(model, { compiler }));
-      const initialData = {a: [1, 3, 5], b: []};
-      const inst = optModel(initialData, funcLibrary);
-      expect(inst.result).toEqual([1, 3, 5]);
-      inst.set(2, 1);
-      expect(inst.result).toEqual([1, 3, 1]);
-    });
+
+    describe('concat', () => {
+      it('2 args', async() => {
+        const model = {
+          result: root.get('a').concat(root.get('b')),
+          set: setter('a', arg0)
+        };
+        const optModel = eval(await compile(model, { compiler }));
+        const initialData = {a: [1, 3, 5], b: [2, 6]};
+        const inst = optModel(initialData, funcLibrary);
+        expect(inst.result).toEqual([1, 3, 5, 2, 6]);
+        inst.set(2, 1);
+        expect(inst.result).toEqual([1, 3, 1, 2, 6]);  
+      });
+      it('multiple arrays', async() => {
+        const model = {
+          result: root.get('a').concat(root.get('b'), root.get('c'), root.get('d')),
+          set: setter('c', arg0)
+        };
+        const optModel = eval(await compile(model, { compiler }));
+        const initialData = {a: [1, 3, 5], b: [2, 6], c: [], d: [9]};
+        const inst = optModel(initialData, funcLibrary);
+        expect(inst.result).toEqual([1, 3, 5, 2, 6, 9]);
+        inst.set(0, 1);
+        expect(inst.result).toEqual([1, 3, 5, 2, 6, 1, 9]);  
+      });
+
+      it('with empty array', async () => {
+        const model = {
+          result: root.get('a').concat(root.get('b')),
+          set: setter('a', arg0)
+        };
+        const optModel = eval(await compile(model, { compiler }));
+        const initialData = {a: [1, 3, 5], b: []};
+        const inst = optModel(initialData, funcLibrary);
+        expect(inst.result).toEqual([1, 3, 5]);
+        inst.set(2, 1);
+        expect(inst.result).toEqual([1, 3, 1]);
+      });
+    })
     it('branching - soft tracking', async () => {
       const valuesInArrays = root.map(item => or(item.get('arr'), [item.get('val')]));
       const indexes = root.map((item, idx) => idx);
