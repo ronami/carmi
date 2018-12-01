@@ -362,6 +362,27 @@ describe('testing array', () => {
         expect(inst.result).toEqual([1, 3, 5, 2, 6, 1, 9]);  
       });
 
+      describe('find', () => {
+        it('when its there', async() => {
+          const model = {
+            result: root.get('a').find(v => and(v.gt(2), v.lt(4)))
+          };
+          const optModel = eval(await compile(model, { compiler }));
+          const initialData = {a: [1, 3, 5]};
+          const inst = optModel(initialData, funcLibrary);
+          expect(inst.result).toEqual(3);
+        });
+        it('when its not there', async() => {
+          const model = {
+            result: root.get('a').find(v => and(v.gt(2), v.lt(4)))
+          };
+          const optModel = eval(await compile(model, { compiler }));
+          const initialData = {a: [1, 7, 5]};
+          const inst = optModel(initialData, funcLibrary);
+          expect(inst.result).toBeNull();
+        });
+      });
+
       it('with empty array', async () => {
         const model = {
           result: root.get('a').concat(root.get('b')),

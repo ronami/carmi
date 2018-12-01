@@ -36,10 +36,16 @@ module.exports = function(chain) {
             (indexInChunk, i, context) => collection.get(context.get('chunkIndex').mult(chunkSize).plus(indexInChunk)), {chunkIndex}))
     }
 
+
+    function find(collection, pred) {
+        const filtered = collection.filter(pred)
+        return filtered.size().eq(0).ternary(null, filtered.get(0))
+    }
+
     function concat(collection, ...args) {
         return _.reduce(args, (a, b) => a.size().plus(b.size()).range().map(index => index.lt(a.size()).ternary(a.get(index), b.get(index.minus(a.size())))), collection)
     }
 
-    return { getIn, includes, assignIn, reduce, concat, chunks };
+    return { getIn, includes, assignIn, reduce, concat, chunks, find };
 };
 
