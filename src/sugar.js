@@ -27,10 +27,19 @@ module.exports = function(chain) {
                 .get(collection.size().minus(1)))
     }
 
-    function concat(a, b) {
-        return a.size().plus(b.size()).range().map(v => v.lt(a.size()).ternary(a.get(v), b.get(v.minus(a.size()))))
+    function chunks(collection, chunkSize) {
+        const numberOfChunks = collection.size().div(chunkSize).ceil()
+        const remainder = collection.size().mod(chunkSize)
+        const sizeOfLastChunk = remainder.eq(0).ternary(chunkSize, remainder)
+        return numberOfChunks.range().map(chunkIndex => 
+            chunkIndex.eq(numberOfChunks.minus(1)).ternary(sizeOfLastChunk, chain(chunkSize)).range().map(
+            (indexInChunk, i, context) => collection.get(context.get('chunkIndex').mult(chunkSize).plus(indexInChunk)), {chunkIndex}))
     }
 
-    return { getIn, includes, assignIn, reduce, concat };
+    function concat(a, b) {
+        return a.size().plus(b.size()).range().map(index => index.lt(a.size()).ternary(a.get(index), b.get(index.minus(a.size()))))
+    }
+
+    return { getIn, includes, assignIn, reduce, concat, chunks };
 };
 

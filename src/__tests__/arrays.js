@@ -284,6 +284,47 @@ describe('testing array', () => {
       expect(inst.result).toEqual(5);
       expectTapFunctionToHaveBeenCalled(1, compiler);
     });
+    describe('chunks', () => {
+      it('standard', async() => {
+        const model = {
+          result: root.chunks(2),
+          set: setter(arg0)
+        };
+
+        const optModel = eval(await compile(model, { compiler }));
+        const initialData = [1, 3, 5, 6];
+        const inst = optModel(initialData, funcLibrary);
+        expect(inst.result).toEqual([[1, 3], [5, 6]]);
+        inst.set(2, 1);
+        expect(inst.result).toEqual([[1, 3], [1, 6]]);
+      })
+      it('with remainder', async() => {
+        const model = {
+          result: root.chunks(2),
+          set: setter(arg0)
+        };
+
+        const optModel = eval(await compile(model, { compiler }));
+        const initialData = [1, 3, 5];
+        const inst = optModel(initialData, funcLibrary);
+        expect(inst.result).toEqual([[1, 3], [5]]);
+        inst.set(2, 1);
+        expect(inst.result).toEqual([[1, 3], [1]]);
+      })
+      it('empty array', async() => {
+        const model = {
+          result: root.chunks(2),
+          set: setter(arg0)
+        };
+
+        const optModel = eval(await compile(model, { compiler }));
+        const initialData = [];
+        const inst = optModel(initialData, funcLibrary);
+        expect(inst.result).toEqual([]);
+        inst.set(0, 1);
+        expect(inst.result).toEqual([[1]]);
+      })
+    })
     it('reduce with empty array', async () => {
       const model = {
         result: root.reduce((agg, value) => agg.plus(value).call('tap'), 0),

@@ -61,6 +61,9 @@ class NaiveCompiler {
         );
       case 'not':
         return `!(${this.generateExpr(expr[1])})`;
+      case 'ceil':
+      case 'floor':
+        return `Math.${tokenType}(${this.generateExpr(expr[1])})`;
       case 'ternary':
         return `((${this.generateExpr(expr[1])})?(${this.generateExpr(expr[2])}):(${this.generateExpr(expr[3])}))`;
       case 'array':
