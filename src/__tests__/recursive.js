@@ -1,4 +1,4 @@
-const { compile, and, or, root, arg0, setter, splice } = require('../../index');
+const { compile, and, or, root, arg0, setter, splice, inferFromModel } = require('../../index');
 const {
   describeCompilers,
   currentValues,
