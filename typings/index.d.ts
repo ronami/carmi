@@ -1,21 +1,18 @@
-import { asExpression } from "./index2";
-
 declare namespace CarmiInternal {
     type FunctionLibraryType = {[name: string]: (...args: any[]) => any}
     
     interface Expression {}
-    interface Looper {}
+    interface Looper<T> {}
     type StringArgument<FunctionLibrary extends FunctionLibraryType> = StringProjection<FunctionLibrary> | string
     type MapPredicate<ValueType, KeyType, ReturnType, ScopeType> =
-        (value?: ValueType, key?: KeyType, scope?: ScopeType) => ReturnType
+        (value: ValueType, key: KeyType, scope: ScopeType) => ReturnType
 
     type RecursePredicate<ValueType, KeyType, ReturnType, ScopeType> =
-        (loop?: Looper, value?: ValueType, key?: KeyType, scope?: ScopeType) => ReturnType
+        (loop: Looper<ValueType>, value: ValueType, key: KeyType, scope: ScopeType) => ReturnType
 
     interface Projection<FunctionLibrary extends FunctionLibraryType> extends Expression {
-        call<FunctionName extends keyof FunctionLibrary, Arguments extends any[]>(func: FunctionName, ...args: Arguments[]): 
-            asProjection<ReturnType<FunctionLibrary[FunctionName]>, FunctionLibrary>
-//        bind<FunctionName extends keyof FunctionLibrary>(functionName: FunctionName, ...args: any[]): <FunctionLibrary[FunctionName]>
+        call<FunctionName extends keyof FunctionLibrary, Arguments>(func: FunctionName, ...args: Arguments[]): 
+            AsProjection<ReturnType<FunctionLibrary[FunctionName]>, FunctionLibrary>
         breakpoint(): this
         trace(logLevel?: StringArgument<FunctionLibrary>): this
     }
@@ -23,12 +20,12 @@ declare namespace CarmiInternal {
     interface PrimitiveProjection<F extends FunctionLibraryType> extends Projection<F> {
         not(): BoolProjection<F>
         ternary<Consequence extends Projection<F>, Alternate extends Projection<F>>(consequence: Consequence, alternate: Alternate): Consequence | Alternate
-        eq(other: PrimitiveProjection<F>): BoolProjection<F>
+        eq(other: StringOrNumberArgument<F>): BoolProjection<F>
         gt(other: StringOrNumberArgument<F>): BoolProjection<F>
         gte(other: StringOrNumberArgument<F>): BoolProjection<F>
         lt(other: StringOrNumberArgument<F>): BoolProjection<F>
         lte(other: StringOrNumberArgument<F>): BoolProjection<F>
-        recur(loop: Looper): BoolProjection<F>
+        recur<ValueType extends Projection<F>>(loop: Looper<ValueType>): ValueType
       }
       interface StringProjection<F extends FunctionLibraryType> extends PrimitiveProjection<F> {
         startsWith(s: StringArgument<F>): BoolProjection<F>
@@ -48,7 +45,7 @@ declare namespace CarmiInternal {
         plus(str: StringArgument<F>): StringProjection<F>
         div(value: StringOrNumberArgument<F>): NumberProjection<F>
         mod(value: StringOrNumberArgument<F>): NumberProjection<F>
-        range(start?: NumberArgument<F>, skip?: NumberArgument<F>): ArrayProjection<NumberProjection<F>, F>
+        range(start?: NumberArgument<F>, skip?: NumberArgument<F>): ArrayProjection<NumberProjection<F>, F, NumberArgument<F>>
         floor(): NumberProjection<F>
         ceil(): NumberProjection<F>
         round(): NumberProjection<F>
@@ -59,34 +56,45 @@ declare namespace CarmiInternal {
       type StringOrNumberArgument<F extends FunctionLibraryType> = StringArgument<F> | NumberArgument<F>
       interface BoolProjection<F extends FunctionLibraryType> extends PrimitiveProjection<F> { }
 
-      interface ObjectOrArrayProjection<ValueType extends Projection<F>, Model, F extends FunctionLibraryType> extends Projection<F> {
-        get<IndexType extends keyof Model>(index: IndexType): asProjection<Model[IndexType], F>
-        // TODO: deep resolving of getIn
-        getIn<FirstArgType extends keyof Model, NextArgTypes extends keyof Model>(path: [FirstArgType, ...(NextArgTypes[])]) :
-          Projection<F>
-        size(): NumberProjection<F>
-      }
-    
-      interface ArrayProjection<ValueType extends Projection<F>, F extends FunctionLibraryType> extends Projection<F> {
-        get(index: number): ValueType,
-        size(): NumberProjection<F>,
-        map<ScopeType extends Projection<F>,
-          RetType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<F>, RetType, ScopeType>, scope?: ScopeType): ArrayProjection<RetType, F>
+      interface AsNativeArray<ValueType, F extends FunctionLibraryType> extends Array<AsNative<ValueType>> {}
+      type AsNative<T> = 
+        T extends Projection<infer F> ? (
+            T extends ArrayProjectionBase<infer ValueType, F> ? AsNativeArray<ValueType, F> :
+            T extends StringProjection<F> ? string :
+            T extends NumberProjection<F> ? number :
+            T extends BoolProjection<F> ? boolean :
+            never
+        ) : T
+
+        interface ArrayProjectionBase<ValueType extends Projection<F>, F extends FunctionLibraryType> extends Projection<F> {
+            get(index: StringOrNumberArgument<F>): ValueType,
+            size(): NumberProjection<F>
+            map<ScopeType extends Projection<F>,
+                RetType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<F>, RetType, ScopeType>, scope?: ScopeType): ArrayProjection<RetType, F>
+        }
+
+       type ProjectionArgument<ProjectionType> = ProjectionType | AsNative<ProjectionType>
+
+       interface ArrayProjection<ValueType extends Projection<F>, F extends FunctionLibraryType, ValueArg = ProjectionArgument<ValueType>> extends ArrayProjectionBase<ValueType, F> {
         any<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<F>, BoolProjection<F>, ScopeType>, scope?: ScopeType): BoolProjection<F>
-        includes(value: ValueType): BoolProjection<F>
-        append(value: ValueType): this
         keyBy<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<F>, StringProjection<F> | NumberProjection<F>, ScopeType>, scope?: ScopeType): ObjectProjection<{}, ValueType, F>
         filter<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<F>, BoolProjection<F>, ScopeType>, scope?: ScopeType): this
         find<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<F>, BoolProjection<F>, ScopeType>, scope?: ScopeType): ValueType
         findIndex<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<F>, BoolProjection<F>, ScopeType>, scope?: ScopeType): NumberProjection<F>
         assign<V extends Projection<F>, RetType = ValueType extends ObjectProjection<{}, V, F> ? ObjectProjection<{}, V, F> : never>(): RetType
         recursiveMap<ScopeType extends Projection<F>,
-          RetType extends Projection<F>>(predicate: RecursePredicate<ValueType, NumberProjection<F>, RetType, ScopeType>, scope?: ScopeType): ArrayProjection<RetType, F>
+            RetType extends Projection<F>>(predicate: RecursePredicate<ValueType, NumberProjection<F>, RetType, ScopeType>, scope?: ScopeType): ArrayProjection<RetType, F>
         reduce<ScopeType extends Projection<F>,
-          RetType extends Projection<F>>(predicate: (aggregate: RetType, value: ValueType, key: NumberProjection<F>) => RetType, initialValue: RetType, scope: ScopeType): RetType
-        concat(...arrays: this[]): this
-        join(separator: string | StringProjection<F>): StringProjection<F>
+            RetType extends Projection<F>>(predicate: (aggregate: RetType, value: ValueType, key: NumberProjection<F>) => RetType, initialValue: RetType, scope: ScopeType): RetType
+        join(separator: StringArgument<F>): StringProjection<F>
         sum(): NumberProjection<F>
+        append<T>(value: T): 
+            T extends ValueArg ? this : T extends ObjectProjection<infer K, infer U, F> ? ArrayProjection<ValueType | T, F> : never
+        concat<ArrayType>(...arrays: ArrayType[]): 
+            ArrayProjection<ValueType | (
+                ArrayType extends ArrayProjection<infer OtherValueType, F> ? OtherValueType :
+                ArrayType extends (infer NativeType)[] ? AsProjection<NativeType, F> : never
+            ), F>
       }
 
       interface ObjectProjection<Props extends {[name: string]: Projection<F>}, AdditionalProps extends Projection<F>, F extends FunctionLibraryType, ValueType extends Projection<F> = AdditionalProps | Props[string]> extends Projection<F> {
@@ -105,10 +113,10 @@ declare namespace CarmiInternal {
         filterBy<ScopeType extends Expression>(predicate: MapPredicate<ValueType, StringProjection<F>, BoolProjection<F>, ScopeType>, scope?: ScopeType): this
         includesValue(value: ValueType): BoolProjection<F>
         has(key: StringProjection<F>): BoolProjection<F>
-        pick(array: ArrayProjection<StringProjection<F>, F>): this
+        pick(keys: (string | keyof Props)[]): this
         groupBy<ScopeType extends Expression>(predicate: MapPredicate<ValueType, StringProjection<F> | NumberProjection<F>, StringProjection<F> | NumberProjection<F>, ScopeType>, scope?: ScopeType): ObjectProjection<{}, ObjectProjection<{}, ValueType, F>, F>
         values(): ArrayProjection<ValueType, F>
-        assignIn<FirstObject extends object, NextObject extends object>(obj: FirstObject, args: NextObject[]) : asProjection<FirstObject & NextObject, F>
+        assignIn<FirstObject extends object, NextObject extends object>(obj: FirstObject, args: NextObject[]) : AsProjection<FirstObject & NextObject, F>
         setIn(path: ArrayProjection<StringProjection<F>, F>) : ObjectProjection<{}, ValueType, F>
         keys(): ArrayProjection<StringProjection<F>, F>
         recursiveMapValues<ScopeType extends Projection<F>, RetType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<F>, RetType, ScopeType>, scope?: ScopeType):          
@@ -121,39 +129,47 @@ declare namespace CarmiInternal {
     type KnownProps<O> = {[key in keyof O]: string|number extends key ? never : O[key]}
     type UnknownProps<O> = {[key in keyof O]: string|number extends key ? O[key] : never}
 
-    interface asArrayProjection<T extends any[], F extends FunctionLibraryType> extends ArrayProjection<asProjection<T, F>, F> { }
+    interface AsArrayProjection<T, F extends FunctionLibraryType> extends ArrayProjection<AsProjection<T, F>, F> { }
     interface asObjectProjection<T, F extends FunctionLibraryType, Known = KnownProps<T>, Unknown = UnknownProps<T>[keyof UnknownProps<T>]> extends 
-        ObjectProjection<{[name in keyof Known]: asProjection<Known[name], F>}, asProjection<Unknown, F>, F> { }
+        ObjectProjection<{[name in keyof Known]: AsProjection<Known[name], F>}, AsProjection<Unknown, F>, F> { }
 
-    type asProjection<NativeType, F extends FunctionLibraryType = {}> =
+    type AsProjection<NativeType, F extends FunctionLibraryType = {}> =
         NativeType extends Projection<F> ? Projection<F> :
-        NativeType extends any[] ? asArrayProjection<NativeType, F> :
+        NativeType extends (infer Value)[] ? AsArrayProjection<Value, F> :
         NativeType extends {[name: string]: any} ? asObjectProjection<NativeType, F> :
         NativeType extends string ? StringProjection<F> :
+        NativeType extends number ? NumberProjection<F> :
         NativeType extends boolean ? BoolProjection<F> :
         never
-
-    export function inferFromModel<ExampleNativeModel>(expressionRoot: Expression, model: ExampleNativeModel) : asProjection<ExampleNativeModel>
-    export function compile(transformations: {[name: string]: any}, options?: object) : string | Promise<String>
-
 
     type SetterExpression<Model, Path, F> = {}
     type SpliceExpression<Model, Path, F> = {}
 
-    export class WithSchema<Schema, F extends FunctionLibraryType = {}> {
-        root: asProjection<Schema, F>
-        chain<T>(t: T): asProjection<T, F>
+    interface API<Schema, F extends FunctionLibraryType = {}> {
+        root: AsProjection<Schema, F>
+        chain<T>(t: T): AsProjection<T, F>
         and<Args extends Projection<F>[]>(...a: Args): Args
         or<Args extends Projection<F>[]>(...a: Args): Args
         setter<Path extends PathSegment[]>(path: Path): SetterExpression<Schema, Path, F>
         splice<Path extends PathSegment[]>(path: Path): SpliceExpression<Schema, Path, F>
-        call<FunctionName extends keyof F, Args extends any[]>(func: FunctionName, ...args: Args) : asProjection<ReturnType<F[FunctionName]>>
+        call<FunctionName extends keyof F, Args extends any[]>(func: FunctionName, ...args: Args) : AsProjection<ReturnType<F[FunctionName]>>
+        bind<FunctionName extends keyof F, BoundArgs extends Projection<F>, Args>(func: FunctionName, ...boundArgs: BoundArgs[]) : 
+            (...args: Args[]) => ReturnType<F[FunctionName]>
+        compile(transformations: {[name: string]: Projection<F>}, options?: object): string
         arg0: Token
         arg1: Token
         arg2: Token
         key: Projection<F>
-        val: Projection<F>
+        val: Projection<F>        
     }
+
 }
 
-export default CarmiInternal.WithSchema
+declare namespace CarmiPublic {
+    export const root: any
+    export function withSchema<Schema, F extends CarmiInternal.FunctionLibraryType = {}>(model?: Schema, functions?: F) : CarmiInternal.API<Schema, F>
+}
+
+export = CarmiPublic
+
+//export type CarmiWithSchema<Schema = any, F extends CarmiInternal.FunctionLibraryType = {}> = CarmiInternal.API<Schema, F>

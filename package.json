@@ -47,6 +47,7 @@
     "typescript": "^3.2.1"
   },
   "devDependencies": {
+    "@types/node": "^10.12.15",
     "babel-plugin-tester": "^5.5.1",
     "invert-promise": "^1.0.1",
     "jest": "^23.6.0",
