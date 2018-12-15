@@ -59,8 +59,8 @@ declare namespace CarmiInternal {
         round(): This extends number ? Graph<number, F> : never
 
         // String
-        startsWith: This extends string ? (s: Argument<string, F>) => Graph<boolean, F> : never
-        endsWith: This extends string ? (s: Argument<string, F>) => Graph<boolean, F> : never
+        startsWith(s: Argument<string, F>): This extends string ? Graph<boolean, F> : never
+        endsWith(s: Argument<string, F>): This extends string ? Graph<boolean, F> : never
         plus(num: Argument<string, F>): This extends string ? Graph<string, F> : never
         split(s: Argument<string, F>): This extends string ? Graph<string[], F> : never 
         toUpperCase(): This extends string ? Graph<string, F> : never
@@ -73,7 +73,7 @@ declare namespace CarmiInternal {
 
         // Array
         get<K extends number>(key: Graph<K, F>|K): This extends any[] ? Graph<This[K], F> : never
-        assign(): This extends any[] ? UnionToIntersection<Value> : never
+        assign(): This extends any[] ? Graph<UnionToIntersection<Value>, F> : never
         head(): This extends any[] ? Graph<Value, F> : never
         last(): This extends any[] ? Graph<Value, F> : never
         sum(): This extends number[] ? Graph<number, F> : never
