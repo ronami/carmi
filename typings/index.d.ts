@@ -3,205 +3,129 @@ declare namespace CarmiInternal {
 
     interface Expression { }
     interface Looper<T> { }
+    type AnyPrimitive = string | number | boolean
 
-    interface Projection<FunctionLibrary extends FunctionLibraryType> extends Expression {
-        call<FunctionName extends keyof FunctionLibrary, Arguments>(func: FunctionName, ...args: Arguments[]):
-            AsProjection<ReturnType<FunctionLibrary[FunctionName]>, FunctionLibrary>
-        breakpoint(): this
-        trace(logLevel?: StringArgument<'log' | 'trace' | 'error' | 'warn', FunctionLibrary>): this
-    }
-    
-    type Primitive = string | number | boolean
     type UnionToIntersection<U> = 
       (U extends any ? (k: U)=>void : never) extends ((k: infer I)=>void) ? I : never
 
-    type IsEnum<T> = Primitive extends T ? false : true
-    type ToTrueOrFalse<T> = UnionToIntersection<T> extends false ? false : true
-    type Identical<A, B> = 
-        IsEnum<A> extends true ? 
-            IsEnum<B> extends true ? 
-            ToTrueOrFalse<A extends B ? 
-                    B extends A ? true : false 
-                : false> : false : false 
+    interface Projection<T, F extends FunctionLibraryType> extends P<T, F> {}
+    type Argument<T, F extends FunctionLibraryType> = T | Projection<T, F>
 
-    type MaybeIncludes<MaybeEnum, MaybePrimitive> =  ToTrueOrFalse<IsEnum<MaybeEnum> extends false ? true :
-            MaybePrimitive extends Primitive ? (MaybeEnum extends MaybePrimitive ? true : false) : true>
+    interface P<This, 
+                F extends FunctionLibraryType,
+                Primitive = (This extends string ? string : This extends number ? number : This extends boolean ? boolean : never),
+                PrimitiveArgument = Argument<AnyPrimitive, F>,
+                Key = keyof This,
+                IsNonObjectArray = (This extends any[] ? false : This extends object ? true : false),
+                Value = This[keyof This],
+                ValueProjection = Projection<Value, F>
+                > extends Expression {
 
-    type Argument<T> = T | AsNative<T>
-    interface PrimitiveProjection<NativeType, F extends FunctionLibraryType> extends Projection<F> {
-        not(): 
-            MaybeIncludes<NativeType, true> extends true ? 
-                (MaybeIncludes<NativeType, false> extends true ? BoolProjection<boolean, F> :
-                BoolProjection<false, F>) :
-            MaybeIncludes<NativeType, false> extends true ? BoolProjection<true, F> : BoolProjection<boolean, F>
+        // Any
+        call<FunctionName extends keyof F, Arguments>(func: FunctionName, ...args: Arguments[]): P<ReturnType<F[FunctionName]>, F>
+        breakpoint(): this
+        trace(logLevel?: 'log' | 'trace' | 'error' | 'warn'): this
 
-        ternary<Consequence extends Projection<F>, Alternate extends Projection<F>>(consequence: Argument<Consequence>, alternate: Argument<Alternate>): 
-            Consequence | Alternate
+        // Primitive
+        not(): P<boolean, F>
+        ternary<Consequence, Alternate>(consequence: Argument<Consequence, F>, alternate: Argument<Alternate, F>): Consequence | Alternate
+        eq(other: PrimitiveArgument): P<boolean, F>
+        gt(other: PrimitiveArgument): P<boolean, F>
+        gte(other: PrimitiveArgument): P<boolean, F>
+        lt(other: PrimitiveArgument): P<boolean, F>
+        lte(other: PrimitiveArgument): P<boolean, F>
+        recur<ValueType>(loop: Looper<ValueType>): ValueType
 
-        eq<Arg extends StringOrNumberArgument<NativeType, F>>(other: Arg): BoolProjection<boolean, F>
-        gt(other: StringOrNumberArgument<NativeType, F>): BoolProjection<boolean, F>
-        gte(other: StringOrNumberArgument<NativeType, F>): BoolProjection<boolean, F>
-        lt(other: StringOrNumberArgument<NativeType, F>): BoolProjection<boolean, F>
-        lte(other: StringOrNumberArgument<NativeType, F>): BoolProjection<boolean, F>
-        recur<ValueType extends Projection<F>>(loop: Looper<ValueType>): ValueType
-    }
+        // Number
+        minus(value: Argument<number, F>): This extends number ? P<number, F> : never
+        mult(value: Argument<number, F>): This extends number ? P<number, F> : never
+        plus(num: Argument<number, F>): This extends number ? P<number, F> : never
+        plus(str: Argument<string, F>): This extends number ? P<number, F> : never
+        div(value: Argument<number, F>): This extends number ? P<number, F> : never
+        mod(value: Argument<number, F>): This extends number ? P<number, F> : never
+        range(start?: Argument<number, F>, skip?: Argument<number, F>): P<number[], F>
+        floor(): This extends number ? P<number, F> : never
+        ceil(): This extends number ? P<number, F> : never
+        round(): This extends number ? P<number, F> : never
 
-    interface BoolProjection<NativeType, F extends FunctionLibraryType> extends PrimitiveProjection<NativeType, F> { }
+        // String
+        startsWith(s: Argument<string, F>): This extends string ? P<boolean, F> : never
+        endsWith(s: Argument<string, F>): This extends string ? P<boolean, F> : never
+        plus(num: Argument<string, F>): This extends string ? P<string, F> : never
+        split(s: Argument<string, F>): This extends string ? P<string[], F> : never 
+        toUpperCase(): This extends string ? P<string, F> : never
+        toLowerCase(): This extends string ? P<string, F> : never
+        parseInt(radix?: number): This extends string ? P<number, F> : never
+        toNumber(): This extends string ? P<number, F> : never
 
-    interface StringProjection<NativeType, F extends FunctionLibraryType> extends PrimitiveProjection<NativeType, F> {
-        startsWith(s: StringArgument<string, F>): BoolProjection<boolean, F>
-        endsWith(s: StringArgument<string, F>): BoolProjection<boolean, F>
-        plus(num: StringArgument<string, F>): StringProjection<string, F>
-        split(s: StringArgument<string, F>): ArrayProjection<StringProjection<string, F>, F>
-        toUpperCase(): StringArgument<string, F>
-        toLowerCase(): StringArgument<string, F>
-        parseInt(radix?: number): NumberProjection<number, F>
-        toNumber(): NumberProjection<number, F>
-    }
+        // Array/object
+        get<K extends string>(key: K): Key extends string ? K extends keyof This ? P<This[K], F> : never : never
+//        get(key: P<Key, F>): P<This[keyof This], F>
+        size(): P<This extends any[] ? This['length'] : This extends object ? P<number, F> : never, F>,
 
-    interface NumberProjection<NativeType, F extends FunctionLibraryType> extends PrimitiveProjection<NativeType, F> {
-        minus(value: NumberArgument<number, F>): NumberProjection<number, F>
-        mult(value: NumberArgument<number, F>): NumberProjection<number, F>
-        plus(num: NumberArgument<number, F>): NumberProjection<number, F>
-        plus(str: StringArgument<string, F>): StringProjection<string, F>
-        div(value: NumberArgument<number, F>): NumberProjection<number, F>
-        mod(value: NumberArgument<number, F>): NumberProjection<number, F>
-        range(start?: NumberArgument<number, F>, skip?: NumberArgument<number, F>): ArrayProjection<NumberProjection<number, F>, F, NumberArgument<number, F>>
-        floor(): NumberProjection<number, F>
-        ceil(): NumberProjection<number, F>
-        round(): NumberProjection<number, F>
-    }
+        // Array
+        assign(): This extends any[] ? UnionToIntersection<Value> : never
+        head(): This extends any[] ? P<Value, F> : never
+        last(): This extends any[] ? P<Value, F> : never
+        sum(): This extends number[] ? P<number, F> : never
+        join(separator: Argument<string, F>): This extends string[] ? P<string, F> : never
+        reverse(): This extends any[] ? P<Value[], F> : never
+        map<Scope, Ret>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<Ret, F>, scope?: Scope) : This extends any[] ? P<Ret[], F> : never
+        any<Scope>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<boolean, F>, scope?: Scope) : This extends any[] ? P<boolean, F> : never
+        keyBy<Scope, Ret extends Argument<string, F>>(functor: (value: Value, key?: Key, scope?: Scope) => Argument<Ret, F>, scope?: Scope) : This extends any[] ?
+            Ret extends string ? {[name in Ret]: Value} : {[name: string]: Value} : never
+        filter<Scope>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<boolean, F>, scope?: Scope) : This extends any[] ? P<Value[], F> : never
+        find<Scope>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<boolean, F>, scope?: Scope) : This extends any[] ? Value : never
+        findIndex<Scope>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<boolean, F>, scope?: Scope) : This extends any[] ? P<number, F> : never
+        reduce<Ret>(functor: (aggregate: Ret, value?: Value, key?: KeyProjection) => Argument<Ret, F>, initialValue?: Ret): This extends any[]? Ret : never
+        append<T>(value: T) : This extends any[] ? P<(Value|T)[], F> : never
+        concat<T>(...arrays: T[][]) : This extends any[] ? P<(Value|T)[], F> : never
+        recursiveMap<Scope, Ret>(functor: (loop: Looper<Ret>, value?: Value, key?: Key, scope?: Scope) => Argument<Ret, F>, scope?: Scope): This extends any[] ? P<Ret[], F> : never
+        includes(value: Value): This extends any[] ? P<boolean, F> : never
 
-
-    type NumberArgument<NativeType extends number, F extends FunctionLibraryType> = NumberProjection<NativeType, F> | number
-    type StringArgument<NativeType extends string, FunctionLibrary extends FunctionLibraryType> = StringProjection<NativeType, FunctionLibrary> | string
-    type MapPredicate<ValueType, KeyType, ReturnType, ScopeType> =
-        (value: ValueType, key: KeyType, scope: ScopeType) => ReturnType
-
-    type RecursePredicate<ValueType, KeyType, ReturnType, ScopeType> =
-        (loop: Looper<ReturnType>, value: ValueType, key: KeyType, scope: ScopeType) => ReturnType
-
-
-    type StringOrNumberArgument<NativeType, F extends FunctionLibraryType> = StringArgument<NativeType extends string ? NativeType : never, F> | NumberArgument<NativeType extends number ? NativeType : never, F>
-
-    interface AsNativeArray<ValueType> extends Array<AsNative<ValueType>> { }
-    interface AsNativeObjectWithKnownProps<K extends {[name: string]: any}> { [name: string]: 
-            AsNative<typeof name extends keyof K ? K[typeof name] : never> }
-    interface AsNativeObjectWithUnknownProps<U> {[name: string]: U}
-
-    interface AsNativeObject<K extends {[name: string]: any}, U> extends AsNativeObjectWithKnownProps<K>, AsNativeObjectWithUnknownProps<U> {}
-
-    type AsNative<T> =
-        T extends Projection<infer F> ? (
-            T extends ArrayProjectionBase<infer ValueType, F> ? AsNativeArray<ValueType> :
-            T extends ObjectProjection<infer K, infer U, F> ? AsNativeObject<K, U> :
-            T extends PrimitiveProjection<F, infer NativeType> ? NativeType :
-            never
-        ) : T
-
-    interface ArrayProjectionBase<ValueType extends Projection<F>, F extends FunctionLibraryType, ArraySize = number> extends Projection<F> {
-        get(index: NumberArgument<number, F>): ValueType,
-        size(): NumberProjection<ArraySize, F>
-        map<ScopeType extends Projection<F>,
-            RetType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<number, F>, RetType, ScopeType>, scope?: ScopeType): ArrayProjection<RetType, F>
-    }
-
-    type ProjectionArgument<ProjectionType> = ProjectionType | AsNative<ProjectionType>
-
-    interface ArrayProjection<ValueType extends Projection<F>, F extends FunctionLibraryType, ArraySize = number> extends ArrayProjectionBase<ValueType, F, ArraySize> {
-        any<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<number, F>, BoolProjection<boolean, F>, ScopeType>, scope?: ScopeType): BoolProjection<boolean, F>
-        keyBy<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<number, F>, StringProjection<string, F> | NumberProjection<number, F>, ScopeType>, scope?: ScopeType): ObjectProjection<{}, ValueType, F>
-        filter<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<number, F>, BoolProjection<boolean, F>, ScopeType>, scope?: ScopeType): this
-        find<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<number, F>, BoolProjection<boolean, F>, ScopeType>, scope?: ScopeType): ValueType
-        findIndex<ScopeType extends Projection<F>>(predicate: MapPredicate<ValueType, NumberProjection<number, F>, BoolProjection<boolean, F>, ScopeType>, scope?: ScopeType): NumberProjection<number, F>
-        assign<V extends Projection<F>, RetType = ValueType extends ObjectProjection<{}, V, F> ? ObjectProjection<{}, V, F> : never>(): RetType
-        recursiveMap<ScopeType extends Projection<F>,
-            RetType extends Projection<F>>(predicate: RecursePredicate<ValueType, NumberProjection<number, F>, RetType, ScopeType>, scope?: ScopeType): ArrayProjection<RetType, F>
-        reduce<ScopeType extends Projection<F>,
-            RetType extends Projection<F>>(predicate: (aggregate: RetType, value: ValueType, key: NumberProjection<number, F>) => RetType, initialValue: RetType, scope: ScopeType): RetType
-        join(separator: StringArgument<string, F>): StringProjection<string, F>
-        sum(): NumberProjection<number, F>
-        append<T>(value: T):
-            T extends ProjectionArgument<ValueType> ? this : T extends ObjectProjection<infer K, infer U, F> ? ArrayProjection<ValueType | T, F> : never
-        concat<ArrayType>(...arrays: ArrayType[]):
-            ArrayProjection<ValueType | (
-                ArrayType extends ArrayProjection<infer OtherValueType, F> ? OtherValueType :
-                ArrayType extends (infer NativeType)[] ? AsProjection<NativeType, F> : never
-            ), F>
-        head(): ValueType
-        last(): ValueType
-        reverse(): this
-    }
-
-    type Hint<H, V> = V
-
-    interface ObjectProjection<Props extends { [name: string]: Projection<F> }, AdditionalProps extends Projection<F>|null, F extends FunctionLibraryType, 
-        ValueType extends Projection<F> = Props[string] | (AdditionalProps extends null ? never : AdditionalProps), 
-        KeyType = keyof Props | (AdditionalProps extends Projection<F> ? string : never)> extends Projection<F> {
-        mapValues<ScopeType extends Projection<F>, RetType extends Projection<F>>(predicate: MapPredicate<ValueType, KeyType, RetType, ScopeType>, scope?: ScopeType):
-            ObjectProjection<{ [name in keyof Props]: RetType }, AdditionalProps extends null ? null : RetType, F>
-
-        mapKeys<ScopeType extends Projection<F>, RetType extends StringProjection<string, F> | string>(predicate: MapPredicate<ValueType, KeyType, RetType, ScopeType>, scope?: ScopeType):
-            ObjectProjection<{ [name in RetType extends string ? RetType : never]: Props[keyof Props] | (AdditionalProps extends null ? never : AdditionalProps) }, AdditionalProps | Props[keyof Props], F>
-
-        get<KeyType extends keyof Props | StringProjection<keyof Props, F> | string>(key: Hint<keyof Props|string, KeyType>):
-            KeyType extends keyof Props ? Props[KeyType] :
-            KeyType extends (string | number) ? AdditionalProps :
-            (AdditionalProps | Props[string])
-
-        anyValues<ScopeType extends Expression>(predicate: MapPredicate<ValueType, KeyType, BoolProjection<boolean, F>, ScopeType>, scope?: ScopeType): BoolProjection<boolean, F>
-        filterBy<ScopeType extends Expression>(predicate: MapPredicate<ValueType, KeyType, BoolProjection<boolean, F>, ScopeType>, scope?: ScopeType): this
-        includesValue(value: ValueType): BoolProjection<boolean, F>
-        has(key: StringProjection<keyof Props|string, F>): BoolProjection<boolean, F>
-        pick<Key extends string>(keys: Key[]): ObjectProjection<{[name in Key]: (Key extends keyof Props ? Props[Key] : (AdditionalProps extends Projection<F> ? AdditionalProps : never)}, null, F>
-        groupBy<ScopeType extends Expression>(predicate: MapPredicate<ValueType, KeyType, StringProjection<string, F>, ScopeType>, scope?: ScopeType): ObjectProjection<{}, ObjectProjection<{}, ValueType, F>, F>
-        values(): ArrayProjection<ValueType, F>
-        assignIn<FirstObject extends object, NextObject extends object>(obj: FirstObject, args: NextObject[]): AsProjection<FirstObject & NextObject, F>
-        setIn(path: ArrayProjection<StringProjection<string, F>, F>): ObjectProjection<{}, ValueType, F>
-        keys(): ArrayProjection<StringProjection<KeyType, F>, F>
-        recursiveMapValues<ScopeType extends Projection<F>, RetType extends Projection<F>>(predicate: MapPredicate<ValueType, KeyType, RetType, ScopeType>, scope?: ScopeType):
-            ObjectProjection<{ [name in keyof Props]: RetType }, AdditionalProps extends null ? null : RetType, F>
+        // Object
+        keys(): IsNonObjectArray extends true ? This extends any[] ? never : P<Key[], F> : never
+        values(): IsNonObjectArray extends true ? This extends any[] ? never : P<Value[], F>: never
+        has(key: Argument<string, F>): IsNonObjectArray extends true ? This extends any[] ? never : 
+            typeof key extends string ? typeof key extends Key ? P<boolean, F> : P<false, F> :
+            never: never
+        includesValue(value: Value): IsNonObjectArray extends true ? P<boolean, F> : never
+        filterBy<Scope>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<boolean, F>, scope?: Scope) : IsNonObjectArray extends true ? this : never
+        pick<K extends Key>(keys: K[]): Value extends object ? K extends keyof This ? P<{[key in K]: This[K]}, F> : never : never
+        mapValues<Scope, Ret>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<Ret, F>, scope?: Scope) : Key extends string ? P<{[name in Key]: Ret}, F> : never
+        mapKeys<Scope, Ret extends Argument<string, F>>(functor: (value: Value, key?: Key, scope?: Scope) => Argument<Ret, F>, scope?: Scope) : 
+        IsNonObjectArray extends true ? P<{[key in Ret extends string ? Ret : string]: Value}, F> : never
+        anyValues<Scope>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<boolean, F>, scope?: Scope) : IsNonObjectArray extends true ? P<boolean, F> : never
+        groupBy<Scope, Ret>(functor: (value: ValueProjection, key?: KeyProjection, scope?: Scope) => Argument<Ret, F>, scope?: Scope) : Key extends string ?  {[key in Ret extends string ? Ret : string]: Value} : never
+        assignIn<V extends object>(value: Argument<V, F>): IsNonObjectArray extends true ? P<This & V, F> : never
+        setIn(path: string[]): this
+        recursiveMapValues<Scope, Ret>(functor: (loop: Looper<Ret>, value?: Value, key?: Key, scope?: Scope) => Argument<Ret, F>, scope?: Scope): Key extends string ? P<{
+            Key: Ret 
+        }, F> : never
     }
 
     class Token { private $type: string }
     type PathSegment = Token | string | number
 
-    type KnownProps<O> = { [key in keyof O]: string | number extends key ? never : O[key] }
-    type UnknownProps<O> = { [key in keyof O]: string | number extends key ? O[key] : never }
-
-    interface AsArrayProjection<T, F extends FunctionLibraryType, ArraySize = number> extends ArrayProjection<AsProjection<T, F>, F, ArraySize> { }
-    interface AsObjectProjection<T, F extends FunctionLibraryType, Known = KnownProps<T>, Unknown = UnknownProps<T>[keyof UnknownProps<T>]> extends
-        ObjectProjection<{ [name in keyof Known]: AsProjection<Known[name], F> }, AsProjection<Unknown, F>, F> { }
-
-    type AsProjection<NativeType, F extends FunctionLibraryType = {}> =
-        NativeType extends Projection<F> ? Projection<F> :
-        NativeType extends (infer Value)[] ? AsArrayProjection<Value, F, NativeType['length']> :
-        NativeType extends { [name: string]: any } ? AsObjectProjection<NativeType, F> :
-        NativeType extends string ? StringProjection<NativeType, F> :
-        NativeType extends number ? NumberProjection<NativeType, F> :
-        NativeType extends boolean ? BoolProjection<NativeType, F> :
-        never
-
-
     type SetterExpression<Model, Path, F> = {}
     type SpliceExpression<Model, Path, F> = {}
 
     interface API<Schema, F extends FunctionLibraryType = {}> {
-        root: AsProjection<Schema, F>
-        chain<T>(t: T): AsProjection<T, F>
-        and<Args extends Projection<F>[]>(...a: Args): Args
-        or<Args extends Projection<F>[]>(...a: Args): Args
+        root: P<Schema, F>
+        chain<T>(t: T): P<T, F>
+        and<Args>(...a: Args[]): Args
+        or<Args>(...a: Args[]): Args
         setter<Path extends PathSegment[]>(path: Path): SetterExpression<Schema, Path, F>
         splice<Path extends PathSegment[]>(path: Path): SpliceExpression<Schema, Path, F>
-        call<FunctionName extends keyof F, Args extends any[]>(func: FunctionName, ...args: Args): AsProjection<ReturnType<F[FunctionName]>>
-        bind<FunctionName extends keyof F, BoundArgs extends Projection<F>, Args>(func: FunctionName, ...boundArgs: BoundArgs[]):
-            (...args: Args[]) => ReturnType<F[FunctionName]>
-        compile(transformations: { [name: string]: Projection<F> }, options?: object): string
+        call<FunctionName extends keyof F, Args extends any[]>(func: FunctionName, ...args: Args): P<ReturnType<F[FunctionName]>, F>
+        bind<FunctionName extends keyof F, BoundArgs, Args>(func: FunctionName, ...boundArgs: BoundArgs[]): (...args: Args[]) => ReturnType<F[FunctionName]>
+        compile(transformations: object, options?: object): string
         arg0: Token
         arg1: Token
         arg2: Token
     }
 
+    
 }
 
 declare namespace CarmiPublic {
